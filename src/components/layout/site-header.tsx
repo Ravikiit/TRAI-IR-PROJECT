@@ -8,6 +8,7 @@ const navigation = [
   { href: "/", label: "Home" },
   { href: "/mou-partners", label: "MoU Partners" },
   { href: "/past-activities", label: "Past Activities" },
+  { href: "/chairman-speeches", label: "Chairman’s Speeches" },
 ];
 
 export function SiteHeader() {
