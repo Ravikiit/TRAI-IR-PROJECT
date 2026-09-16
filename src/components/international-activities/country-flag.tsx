@@ -17,6 +17,9 @@ const locationCountryCodes: Record<string, string> = {
   "Chiang Mai, Thailand": "th",
   "Seoul, Republic of Korea": "kr",
   "Riyadh, Saudi Arabia": "sa",
+  Egypt: "eg",
+  "Stockholm, Sweden": "se",
+  Singapore: "sg",
 };
 
 /** A deliberate mapping for source-location labels. Mixed locations remain unflagged. */
