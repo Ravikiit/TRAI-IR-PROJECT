@@ -11,6 +11,12 @@ const locationCountryCodes: Record<string, string> = {
   Qatar: "qa",
   "Doha, Qatar": "qa",
   "Bhubaneswar, India": "in",
+  "New Delhi, India": "in",
+  "London, UK": "gb",
+  "Kampala, Uganda": "ug",
+  "Chiang Mai, Thailand": "th",
+  "Seoul, Republic of Korea": "kr",
+  "Riyadh, Saudi Arabia": "sa",
 };
 
 /** A deliberate mapping for source-location labels. Mixed locations remain unflagged. */
