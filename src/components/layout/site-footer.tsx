@@ -4,7 +4,7 @@ export function SiteFooter() {
       <div className="container footer-inner">
         <div><strong>TRAI IR</strong><span>International Relations</span></div>
         <p>Developed by Ravi Prakash Mishra<span>Young Professional, TRAI</span></p>
-        <small>Strictly for Internal Use</small>
+        <small>🔒 STRICTLY FOR INTERNAL USE</small>
       </div>
     </footer>
   );
