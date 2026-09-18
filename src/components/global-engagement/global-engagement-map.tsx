@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { countryKey, countryMapCoordinates } from "@/content/global-engagement";
+import { mouPartners } from "@/content/mou-partners";
 import type { CountryMasterRecord, GlobalEngagementActivity } from "@/types/global-engagement";
 import styles from "./global-engagement-map.module.css";
 
@@ -16,6 +17,13 @@ const MAP_HEIGHT = 500;
 const RECENT_ACTIVITY_LIMIT = 5;
 const countryFlagCodes: Record<string, string> = {
   Afghanistan: "af", Algeria: "dz", Australia: "au", Bangladesh: "bd", Bhutan: "bt", Botswana: "bw", Brazil: "br", Cambodia: "kh", Chad: "td", Egypt: "eg", "Europian Union (EU)": "eu", France: "fr", Georgia: "ge", Greece: "gr", Japan: "jp", Malaysia: "my", Mauritius: "mu", "Saudi Arabia": "sa", Singapore: "sg", "South Africa": "za", "Sri Lanka/ Colombo": "lk", Sudan: "sd", Sweden: "se", Tanzania: "tz", Thailand: "th", Turkey: "tr", Uganda: "ug", "United Arab Emirates (UAE)": "ae", "United Kingdom": "gb", "United States of America": "us", Vanuatu: "vu", Vietnam: "vn",
+};
+const mouPartnerCountryNames: Record<string, string> = {
+  "Europian Union (EU)": "European Union",
+  "Sri Lanka/ Colombo": "Sri Lanka",
+  Turkey: "Türkiye",
+  "United Arab Emirates (UAE)": "United Arab Emirates",
+  Vietnam: "Viet Nam",
 };
 
 function project([longitude, latitude]: Point): Point { return [((longitude + 180) / 360) * MAP_WIDTH, ((90 - latitude) / 180) * MAP_HEIGHT]; }
@@ -73,9 +81,21 @@ function CountryProfile({ country, activities, onViewAll }: { country: CountrySu
   if (!country) return <aside className={`${styles.profile} ${styles.profileEmpty}`} aria-live="polite"><p className="page-kicker">COUNTRY PROFILE</p><h2>Select a country</h2><p>Choose a marker on the map to view its workbook-backed engagement record.</p></aside>;
   const counterparts = [...new Set(activities.flatMap((activity) => activity.counterpart ? [activity.counterpart] : []))];
   const flagCode = countryFlagCodes[country.country];
-  return <aside className={styles.profile} aria-labelledby="country-profile-title" aria-live="polite"><p className="page-kicker">COUNTRY PROFILE</p><div className={styles.profileTitle}>{flagCode ? <span className={`fi fi-${flagCode} country-flag`} aria-hidden="true" /> : null}<h2 id="country-profile-title">{country.country}</h2></div><dl className={styles.profileFields}><ProfileField label="MoU/LoI status" value={country.hasMouLoi ? "MoU/LoI" : "Other International Engagement"} /><ProfileField label="Organisation / Counterpart" value={counterparts.join(" · ") || null} /><ProfileField label="First engagement" value={country.firstEngagement} /><ProfileField label="Latest engagement" value={country.latestEngagement} /></dl><button type="button" className={styles.viewAll} onClick={onViewAll}>View all activities with {country.country} <span aria-hidden="true">→</span></button></aside>;
+  const mouPartner = mouPartners.find((partner) => partner.country === (mouPartnerCountryNames[country.country] ?? country.country));
+  return <aside className={styles.profile} aria-labelledby="country-profile-title" aria-live="polite">
+    <p className="page-kicker">COUNTRY PROFILE</p>
+    <div className={styles.profileTitle}>{flagCode ? <span className={`fi fi-${flagCode} country-flag`} aria-hidden="true" /> : null}<h2 id="country-profile-title">{country.country}</h2></div>
+    <dl className={styles.profileFields}>
+      <ProfileField label="MoU/LoI status" value={country.hasMouLoi ? "MoU/LoI" : "Other International Engagement"} icon={<DocumentIcon />} />
+      <ProfileField label="Organisation / Counterpart" value={counterparts.join(" · ") || null} />
+      {country.hasMouLoi && mouPartner?.mouDate ? <ProfileField label="MoU/LoI sign date" value={mouPartner.mouDate} icon={<CalendarIcon />} /> : null}
+    </dl>
+    <button type="button" className={styles.viewAll} onClick={onViewAll}>View all activities with {country.country} <span aria-hidden="true">→</span></button>
+  </aside>;
 }
-function ProfileField({ label, value }: { label: string; value: string | null }) { return value ? <div><dt>{label}</dt><dd>{value}</dd></div> : null; }
+function ProfileField({ label, value, icon }: { label: string; value: string | null; icon?: ReactNode }) { return value ? <div><dt>{label}</dt><dd className={icon ? styles.profileValueBox : undefined}>{icon}{value}</dd></div> : null; }
+function DocumentIcon() { return <svg className={styles.profileIcon} viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM15 3v4h4M9 12h6M9 16h6" /></svg>; }
+function CalendarIcon() { return <svg className={styles.profileIcon} viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16M8 14h3M13 14h3M8 17h3" /></svg>; }
 function RecentActivities({ country, activities, totalActivities, showAll, onViewAll }: { country: CountrySummary | null; activities: GlobalEngagementActivity[]; totalActivities: number; showAll: boolean; onViewAll: () => void }) {
   const heading = country ? `Recent Activities (${country.country})` : "Recent Activities";
   return <section className={styles.activities} aria-live="polite" aria-labelledby="recent-activities-title"><div className={styles.activityHeading}><div><h2 id="recent-activities-title">{heading}</h2>{country ? <p>{totalActivities} {totalActivities === 1 ? "engagement" : "engagements"} in the authoritative workbook</p> : <p>Select a country marker to view its activities.</p>}</div>{country ? <button type="button" className={styles.viewAll} onClick={onViewAll}>{showAll && totalActivities > RECENT_ACTIVITY_LIMIT ? "Show recent activities" : <>View all activities <span aria-hidden="true">→</span></>}</button> : null}</div>{country && activities.length ? <div className={styles.tableWrap}><table><thead><tr><th scope="col">Date</th><th scope="col">Activity / Engagement</th><th scope="col">Type</th><th scope="col">Organisation / Counterpart</th></tr></thead><tbody>{activities.map((activity, index) => <tr key={`${activity.country}-${activity.engagement}-${activity.startDate ?? "undated"}-${index}`}><td>{activity.dateDisplay ?? ""}</td><td>{activity.engagement}</td><td>{activity.category}</td><td>{activity.counterpart ?? ""}</td></tr>)}</tbody></table></div> : country ? <p className={styles.empty}>No activities match the selected filters.</p> : null}</section>;
