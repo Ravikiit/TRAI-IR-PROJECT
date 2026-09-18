@@ -27,7 +27,7 @@ function PartnerCard({ partner }: { partner: MouPartner }) {
   const hasContact = partner.contactHead !== "Not provided";
   return (
     <article className="partner-card">
-      <p className="partner-country"><span className={`fi fi-${partner.countryCode}`} aria-hidden="true" /><span>{partner.country}</span></p>
+      <p className="partner-country"><span className={`fi fi-${partner.countryCode} partner-country-flag`} aria-hidden="true" /><span>{partner.country}</span></p>
       <h2>{partner.organisation}</h2>
       <p className="partner-detail">{partner.organisationDetail}</p>
       {partner.keyAreas.length > 0 ? <section className="partner-expertise" aria-label="Research-identified key expertise">

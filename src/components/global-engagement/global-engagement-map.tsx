@@ -84,7 +84,7 @@ function CountryProfile({ country, activities, onViewAll }: { country: CountrySu
   const mouPartner = mouPartners.find((partner) => partner.country === (mouPartnerCountryNames[country.country] ?? country.country));
   return <aside className={styles.profile} aria-labelledby="country-profile-title" aria-live="polite">
     <p className="page-kicker">COUNTRY PROFILE</p>
-    <div className={styles.profileTitle}>{flagCode ? <span className={`fi fi-${flagCode} country-flag`} aria-hidden="true" /> : null}<h2 id="country-profile-title">{country.country}</h2></div>
+    <div className={styles.profileTitle}>{flagCode ? <span className={`fi fi-${flagCode} country-flag ${styles.countryProfileFlag}`} aria-hidden="true" /> : null}<h2 id="country-profile-title">{country.country}</h2></div>
     <dl className={styles.profileFields}>
       <ProfileField label="MoU/LoI status" value={country.hasMouLoi ? "MoU/LoI" : "Other International Engagement"} icon={<DocumentIcon />} />
       <ProfileField label="Organisation / Counterpart" value={counterparts.join(" · ") || null} />
