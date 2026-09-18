@@ -7,4 +7,5 @@ export type MouPartner = {
   contactDesignation: string;
   mouDate: string;
   officialWebsite: string;
+  keyAreas: string[];
 };

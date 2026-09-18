@@ -30,6 +30,10 @@ function PartnerCard({ partner }: { partner: MouPartner }) {
       <p className="partner-country"><span className={`fi fi-${partner.countryCode}`} aria-hidden="true" /><span>{partner.country}</span></p>
       <h2>{partner.organisation}</h2>
       <p className="partner-detail">{partner.organisationDetail}</p>
+      {partner.keyAreas.length > 0 ? <section className="partner-expertise" aria-label="Research-identified key expertise">
+        <h3>RESEARCH-IDENTIFIED KEY EXPERTISE</h3>
+        <ul>{partner.keyAreas.map((area) => <li key={area}>{area}</li>)}</ul>
+      </section> : null}
       <div className="partner-meta">
         <div>
           <h3>Contact Head</h3>
