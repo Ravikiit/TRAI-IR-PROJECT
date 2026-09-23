@@ -18,8 +18,8 @@ const exploreItems = [
     icon: "calendar" as const,
   },
   {
-    title: "Chairman’s Speeches",
-    description: "Speeches, keynote addresses and remarks delivered by the Chairman of TRAI at national and international forums.",
+    title: "Authority’s Speeches",
+    description: "Speeches, keynote addresses and remarks delivered by the Authority of TRAI at national and international forums.",
     action: "View Speeches",
     href: "/chairman-speeches",
     icon: "podium" as const,
