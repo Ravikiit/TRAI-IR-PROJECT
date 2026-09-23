@@ -1,49 +1,96 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ChairmanSpeech, EngagementType } from "@/types/chairman-speech";
+import type { ChairmanSpeech } from "@/types/chairman-speech";
 import { SpeechCard } from "./speech-card";
 import styles from "./speech-repository.module.css";
 
-type Filters = { search: string; year: string; chairman: string; type: "" | EngagementType; location: string; organisation: string; topic: string };
-const emptyFilters: Filters = { search: "", year: "", chairman: "", type: "", location: "", organisation: "", topic: "" };
+type Filters = {
+  search: string;
+  year: string;
+  category: string;
+  documentType: string;
+  theme: string;
+};
 
-function unique(values: string[]) { return [...new Set(values.filter(Boolean))].sort((first, second) => first.localeCompare(second)); }
+const emptyFilters: Filters = { search: "", year: "", category: "", documentType: "", theme: "" };
+
+function unique(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((first, second) => first.localeCompare(second));
+}
+
+function dateValue(date: string) {
+  const value = Date.parse(date);
+  return Number.isNaN(value) ? 0 : value;
+}
 
 export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const options = useMemo(() => ({
-    years: unique(speeches.map((speech) => speech.year)).sort((first, second) => second.localeCompare(first)),
-    chairmen: unique(speeches.map((speech) => speech.chairman)),
-    locations: unique(speeches.map((speech) => [speech.country, speech.location].filter(Boolean).join(" · "))),
-    organisations: unique(speeches.map((speech) => speech.organisation)),
-    topics: unique(speeches.flatMap((speech) => speech.topics)),
+    years: unique(speeches.map((speech) => String(speech.Year))).sort((a, b) => b.localeCompare(a)),
+    categories: unique(speeches.map((speech) => speech["Broad Category"])),
+    documentTypes: unique(speeches.map((speech) => speech["Document Type"])),
+    themes: unique(speeches.map((speech) => speech["Standardised Theme"])),
   }), [speeches]);
-  const filteredSpeeches = useMemo(() => speeches.filter((speech) => {
-    const searchable = [speech.title, speech.event, speech.organisation, speech.location, speech.country, speech.description, ...speech.topics].join(" ").toLowerCase();
-    const location = [speech.country, speech.location].filter(Boolean).join(" · ");
-    return (!filters.search || searchable.includes(filters.search.toLowerCase())) && (!filters.year || speech.year === filters.year) && (!filters.chairman || speech.chairman === filters.chairman) && (!filters.type || speech.type === filters.type) && (!filters.location || location === filters.location) && (!filters.organisation || speech.organisation === filters.organisation) && (!filters.topic || speech.topics.includes(filters.topic));
-  }), [filters, speeches]);
-  const speechesByYear = useMemo(() => filteredSpeeches.reduce<Record<string, ChairmanSpeech[]>>((groups, speech) => { (groups[speech.year] ??= []).push(speech); return groups; }, {}), [filteredSpeeches]);
-  const updateFilter = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => setFilters((current) => ({ ...current, [key]: value }));
+  const filteredSpeeches = useMemo(() => speeches
+    .filter((speech) => {
+      const searchable = [
+        speech.Title,
+        speech.Event,
+        speech["Broad Category"],
+        speech["Standardised Theme"],
+        speech["Short Description"],
+      ].join(" ").toLowerCase();
+      return (!filters.search || searchable.includes(filters.search.toLowerCase()))
+        && (!filters.year || String(speech.Year) === filters.year)
+        && (!filters.category || speech["Broad Category"] === filters.category)
+        && (!filters.documentType || speech["Document Type"] === filters.documentType)
+        && (!filters.theme || speech["Standardised Theme"] === filters.theme);
+    })
+    .sort((first, second) => dateValue(second.Date) - dateValue(first.Date)), [filters, speeches]);
+  const updateFilter = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
 
-  return <div className={styles.repository}>
-    <div className={styles.toolbar} aria-label="Speech repository filters">
-      <label className={styles.searchWrap}><span className="sr-only">Search speeches</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5" /><path d="m16 16 4.2 4.2" /></svg><input value={filters.search} onChange={(event) => updateFilter("search", event.target.value)} type="search" placeholder="Search speeches, events, organisations or topics…" /></label>
-      <div className={styles.filters}>
-        <FilterSelect label="Year" value={filters.year} onChange={(value) => updateFilter("year", value)} allLabel="All years" options={options.years} />
-        <FilterSelect label="Chairman" value={filters.chairman} onChange={(value) => updateFilter("chairman", value)} allLabel="All chairmen" options={options.chairmen} />
-        <FilterSelect label="Engagement Type" value={filters.type} onChange={(value) => updateFilter("type", value as Filters["type"])} allLabel="All" options={["International", "Domestic"]} optionValues={["international", "domestic"]} />
-        <FilterSelect label="Country / Location" value={filters.location} onChange={(value) => updateFilter("location", value)} allLabel="All locations" options={options.locations} />
-        <FilterSelect label="Organisation / Forum" value={filters.organisation} onChange={(value) => updateFilter("organisation", value)} allLabel="All organisations / forums" options={options.organisations} />
-        <FilterSelect label="Topic" value={filters.topic} onChange={(value) => updateFilter("topic", value)} allLabel="All topics" options={options.topics} />
+  return (
+    <div className={styles.repository}>
+      <div className={styles.toolbar} aria-label="Authority speeches filters">
+        <label className={styles.searchWrap}>
+          <span className="sr-only">Search speeches</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5" /><path d="m16 16 4.2 4.2" /></svg>
+          <input value={filters.search} onChange={(event) => updateFilter("search", event.target.value)} type="search" placeholder="Search speeches, events or topics..." />
+        </label>
+        <div className={styles.filters}>
+          <FilterSelect label="Year" value={filters.year} onChange={(value) => updateFilter("year", value)} allLabel="All years" options={options.years} />
+          <FilterSelect label="Broad Category" value={filters.category} onChange={(value) => updateFilter("category", value)} allLabel="All categories" options={options.categories} />
+          <FilterSelect label="Document Type" value={filters.documentType} onChange={(value) => updateFilter("documentType", value)} allLabel="All document types" options={options.documentTypes} />
+          <FilterSelect label="Standardised Theme" value={filters.theme} onChange={(value) => updateFilter("theme", value)} allLabel="All themes" options={options.themes} />
+        </div>
       </div>
-      <button className={styles.clearFilters} type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>
+      <div className={styles.resultsHeader}>
+        <h2>{filteredSpeeches.length} Documents</h2>
+        <button type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>
+      </div>
+      {filteredSpeeches.length === 0 ? (
+        <section className={styles.emptyState} aria-live="polite">
+          <h3>No documents found</h3>
+          <button type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>
+        </section>
+      ) : (
+        <div className={styles.grid}>{filteredSpeeches.map((speech) => <SpeechCard key={speech.ID} speech={speech} />)}</div>
+      )}
     </div>
-    {speeches.length === 0 ? <section className={styles.emptyState} aria-live="polite"><div aria-hidden="true" className={styles.emptyIcon}><svg viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6zM15 4v4h4M9 12h6M9 16h6" /></svg></div><h3>No speeches have been added to the repository yet.</h3><p>Speech records will appear here once the repository is populated.</p></section> : Object.entries(speechesByYear).sort(([first], [second]) => second.localeCompare(first)).map(([year, yearSpeeches]) => <section className={styles.yearGroup} key={year} aria-labelledby={`speech-year-${year}`}><h3 id={`speech-year-${year}`}>{year}</h3><div className={styles.grid}>{yearSpeeches.map((speech) => <SpeechCard key={speech.id} speech={speech} />)}</div></section>)}
-  </div>;
+  );
 }
 
-function FilterSelect({ label, value, onChange, allLabel, options, optionValues }: { label: string; value: string; onChange: (value: string) => void; allLabel: string; options: string[]; optionValues?: string[] }) {
-  return <label><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="">{allLabel}</option>{options.map((option, index) => <option key={option} value={optionValues?.[index] ?? option}>{option}</option>)}</select></label>;
+function FilterSelect({ label, value, onChange, allLabel, options }: { label: string; value: string; onChange: (value: string) => void; allLabel: string; options: string[] }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{allLabel}</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
 }

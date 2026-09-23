@@ -9,7 +9,7 @@ const navigation = [
   { href: "/mou-partners", label: "MoU Partners" },
   { href: "/global-engagement-map", label: "Global Engagement Map" },
   { href: "/past-activities", label: "Past Activities" },
-  { href: "/chairman-speeches", label: "Chairman’s Speeches" },
+  { href: "/chairman-speeches", label: "Authority’s Speeches" },
 ];
 
 export function SiteHeader() {

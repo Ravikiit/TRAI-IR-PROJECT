@@ -1,17 +1,15 @@
-export type EngagementType = "international" | "domestic";
-
 export type ChairmanSpeech = {
-  id: string;
-  title: string;
-  chairman: string;
-  date: string;
-  year: string;
-  event: string;
-  organisation: string;
-  location: string;
-  country: string;
-  type: EngagementType;
-  topics: string[];
-  description: string;
-  documentPath: string;
+  ID: string;
+  Title: string;
+  Event: string;
+  Date: string;
+  Year: number | string;
+  "Document Type": string;
+  "Broad Category": string;
+  "Standardised Theme": string;
+  "Short Description": string;
+  filePath: string;
+  "Original Filename": string;
+  "Theme Confidence": string;
+  "Human Review": string;
 };
