@@ -1,4 +1,5 @@
 import { ExploreCard } from "@/components/home/explore-card";
+import { DocumentContributionBanner } from "@/components/home/document-contribution-banner";
 import { SiteHeader } from "@/components/layout/site-header";
 import { worldMapFeatures } from "@/content/world-map-geometries";
 
@@ -445,6 +446,8 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        <DocumentContributionBanner />
 
         <section className="explore-section" aria-labelledby="explore-title">
           <div className="container">
