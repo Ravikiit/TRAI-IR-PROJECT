@@ -85,9 +85,11 @@ function optionalText(value: string | undefined) {
   return trimmed || null;
 }
 
-function safeDiagnosticText(value: string | undefined) {
+export function safeUploadDiagnostic(value: string | undefined, sensitivePath?: string) {
   if (!value) return undefined;
-  return value
+  const safeValue = sensitivePath ? value.replaceAll(sensitivePath, "[redacted path]") : value;
+  return safeValue
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[redacted URL]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted token]")
     .replace(/\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+\b/g, "[redacted key]")
@@ -109,10 +111,10 @@ export async function uploadDocument(input: DocumentUploadInput) {
   if (storageError) {
     const diagnostics = {
       status: storageError.status,
-      statusCode: safeDiagnosticText(storageError.statusCode),
-      code: safeDiagnosticText(storageError.code),
+      statusCode: safeUploadDiagnostic(storageError.statusCode),
+      code: safeUploadDiagnostic(storageError.code),
     };
-    const message = safeDiagnosticText(storageError.message) ?? "Unknown Storage error";
+    const message = safeUploadDiagnostic(storageError.message, filePath) ?? "Unknown Storage error";
     console.error("Supabase document Storage upload failed.", {
       ...diagnostics,
       message,
@@ -154,13 +156,13 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (databaseError) {
-    const message = safeDiagnosticText(databaseError.message) ?? "Unknown database error";
+    const message = safeUploadDiagnostic(databaseError.message, filePath) ?? "Unknown database error";
     console.error("Supabase document database insert failed after Storage upload.", {
-      code: safeDiagnosticText(databaseError.code),
+      code: safeUploadDiagnostic(databaseError.code),
       message,
     });
     throw new DocumentUploadError("database", message, {
-      code: safeDiagnosticText(databaseError.code),
+      code: safeUploadDiagnostic(databaseError.code),
     });
   }
 }

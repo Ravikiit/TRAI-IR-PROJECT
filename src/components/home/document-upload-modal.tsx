@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import {
   DOCUMENT_CATEGORIES,
   DocumentUploadError,
+  safeUploadDiagnostic,
   uploadDocument,
 } from "@/lib/supabase/documents";
 import type { DocumentCategory, DocumentUploadInput } from "@/lib/supabase/documents";
@@ -336,10 +337,10 @@ export function DocumentUploadModal({
 
     setErrors(nextErrors);
     setValidationMessage("");
-    setUploadError("");
     if (Object.keys(nextErrors).length > 0) return;
     if (!category || !selectedFile) return;
 
+    setUploadError("");
     setIsUploading(true);
     try {
       await uploadDocument({
@@ -367,11 +368,18 @@ export function DocumentUploadModal({
       if (error instanceof DocumentUploadError && error.stage === "storage") {
         setUploadError(storageErrorMessage(error));
       } else if (error instanceof DocumentUploadError && error.stage === "database") {
+        const response = [
+          error.diagnostics?.code && `code: ${error.diagnostics.code}`,
+          error.message && `message: ${error.message}`,
+        ].filter(Boolean).join("; ");
         setUploadError(
-          "The document file was uploaded, but its record could not be saved. Please contact the site administrator before retrying.",
+          `The document file was uploaded, but its record could not be saved.${response ? ` Supabase response: ${response}` : ""} Please contact the site administrator before retrying.`,
         );
       } else {
         const errorName = error instanceof Error ? error.name : "UnknownError";
+        const message = safeUploadDiagnostic(
+          error instanceof Error ? error.message : undefined,
+        );
         if (error instanceof Error && error.message.includes("Missing NEXT_PUBLIC_SUPABASE_URL")) {
           console.error("Supabase document upload is missing its public deployment configuration.", {
             errorName,
@@ -384,14 +392,20 @@ export function DocumentUploadModal({
             "Supabase is not configured for this deployment. The site administrator should check the required Vercel environment variables and redeploy.",
           );
         } else if (error instanceof TypeError) {
-          console.error("Supabase document upload could not reach the service.", { errorName });
+          console.error("Supabase document upload could not reach the service.", {
+            errorName,
+            message,
+          });
           setUploadError(
-            "Could not reach Supabase. Check your connection and contact the site administrator if the problem continues.",
+            `Could not reach Supabase${message ? `: ${message}` : ""}. Check your connection and contact the site administrator if the problem continues.`,
           );
         } else {
-          console.error("Supabase document upload could not be completed.", { errorName });
+          console.error("Supabase document upload could not be completed.", {
+            errorName,
+            message,
+          });
           setUploadError(
-            "The upload could not be completed. Please contact the site administrator and try again later.",
+            `The upload could not be completed${message ? `: ${message}` : ""}. Please contact the site administrator and try again later.`,
           );
         }
       }
