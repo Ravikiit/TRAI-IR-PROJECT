@@ -1,4 +1,7 @@
-export type VerificationStatus = "Confirmed" | "Confirmed; exact date to verify";
+export type VerificationStatus =
+  | "Confirmed"
+  | "Confirmed; exact date to verify"
+  | "User submitted";
 
 export type InternationalActivity = {
   /** Stable UI key. The source workbook's Activity ID is retained separately. */
@@ -17,7 +20,8 @@ export type InternationalActivity = {
   theme: string;
   outcome: string;
   source: string;
-  sourceUrl: string;
+  sourceUrl: string | null;
   sourceAuthority: string;
   verificationStatus: VerificationStatus;
+  documentUrl?: string;
 };

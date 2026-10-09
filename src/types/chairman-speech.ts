@@ -12,4 +12,6 @@ export type ChairmanSpeech = {
   "Original Filename": string;
   "Theme Confidence": string;
   "Human Review": string;
+  "Speaker Name"?: string;
+  "Speaker Designation"?: string;
 };

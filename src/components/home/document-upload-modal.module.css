@@ -84,6 +84,17 @@
   gap: 16px;
 }
 
+.categoryFields {
+  display: grid;
+  gap: 16px;
+}
+
+.metadataFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .field {
   display: grid;
   min-width: 0;
@@ -104,7 +115,8 @@
 }
 
 .field input:not([type="file"]),
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -122,6 +134,10 @@
   resize: vertical;
 }
 
+.field select {
+  cursor: pointer;
+}
+
 .field input::placeholder,
 .field textarea::placeholder {
   color: #708296;
@@ -129,7 +145,8 @@
 }
 
 .field input[aria-invalid="true"],
-.field textarea[aria-invalid="true"] {
+.field textarea[aria-invalid="true"],
+.field select[aria-invalid="true"] {
   border-color: #a72e2e;
 }
 
@@ -343,6 +360,11 @@
   }
 
   .topFields {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+
+  .metadataFields {
     grid-template-columns: 1fr;
     gap: 17px;
   }

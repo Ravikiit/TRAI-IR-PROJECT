@@ -45,7 +45,18 @@ export function ActivityExplorer({ activities }: { activities: InternationalActi
 
 function ActivityCard({ activity, onSelect }: { activity: InternationalActivity; onSelect: (activity: InternationalActivity) => void }) {
   const needsDateCheck = activity.verificationStatus.includes("date to verify");
-  return <article className="activity-card"><div className="activity-card-top"><span className="activity-date">{activity.date}</span><span className={needsDateCheck ? "verification-dot needs-review" : "verification-dot"} title={activity.verificationStatus}>{needsDateCheck ? "Date to verify" : "Confirmed"}</span></div><p className="activity-location"><CountryFlag location={activity.location} />{activity.location} <span>·</span> {activity.region}</p><h3>{activity.title}</h3><p className="activity-description">{activity.description}</p><dl><div><dt>Activity type</dt><dd>{activity.activityType}</dd></div><div><dt>International counterpart</dt><dd>{activity.counterpart}</dd></div></dl><button className="text-action" type="button" onClick={() => onSelect(activity)}>View activity record <span aria-hidden="true">→</span></button></article>;
+  const isUserSubmitted = activity.verificationStatus === "User submitted";
+  const statusLabel = isUserSubmitted
+    ? "User submitted"
+    : needsDateCheck
+      ? "Date to verify"
+      : "Confirmed";
+  const statusClass = isUserSubmitted
+    ? "verification-dot user-submitted"
+    : needsDateCheck
+      ? "verification-dot needs-review"
+      : "verification-dot";
+  return <article className="activity-card"><div className="activity-card-top"><span className="activity-date">{activity.date}</span><span className={statusClass} title={activity.verificationStatus}>{statusLabel}</span></div><p className="activity-location"><CountryFlag location={activity.location} />{activity.location} <span>·</span> {activity.region}</p><h3>{activity.title}</h3><p className="activity-description">{activity.description}</p><dl><div><dt>Activity type</dt><dd>{activity.activityType}</dd></div><div><dt>International counterpart</dt><dd>{activity.counterpart}</dd></div></dl><button className="text-action" type="button" onClick={() => onSelect(activity)}>View activity record <span aria-hidden="true">→</span></button></article>;
 }
 
 function Timeline({ activities, onSelect }: { activities: InternationalActivity[]; onSelect: (activity: InternationalActivity) => void }) {
@@ -58,7 +69,7 @@ function GroupedActivities({ activities, field, onSelect }: { activities: Intern
 }
 
 function ActivityDetail({ activity, onClose }: { activity: InternationalActivity; onClose: () => void }) {
-  return <div className="detail-overlay" role="presentation" onMouseDown={onClose}><article className="activity-detail" role="dialog" aria-modal="true" aria-labelledby="activity-record-title" onMouseDown={(event) => event.stopPropagation()}><button className="detail-close" type="button" onClick={onClose} aria-label="Close activity record">×</button><p className="page-kicker">{activity.activityId} · {activity.verificationStatus}</p><h2 id="activity-record-title">{activity.title}</h2><div className="detail-meta"><span>{activity.date}</span><span className="flagged-location"><CountryFlag location={activity.location} />{activity.location}</span><span>{activity.region}</span></div><DetailField label="International counterpart" value={activity.counterpart} /><DetailField label="TRAI participants" value={activity.participants} /><DetailField label="Description" value={activity.description} /><DetailField label="Theme / focus" value={activity.theme} /><DetailField label="Key outcome / purpose" value={activity.outcome} /><DetailField label="Source / evidence" value={activity.source} /><p className="detail-source"><a href={activity.sourceUrl} target="_blank" rel="noreferrer">Open supporting source ↗</a><span>{activity.sourceAuthority}</span></p></article></div>;
+  return <div className="detail-overlay" role="presentation" onMouseDown={onClose}><article className="activity-detail" role="dialog" aria-modal="true" aria-labelledby="activity-record-title" onMouseDown={(event) => event.stopPropagation()}><button className="detail-close" type="button" onClick={onClose} aria-label="Close activity record">×</button><p className="page-kicker">{activity.activityId} · {activity.verificationStatus}</p><h2 id="activity-record-title">{activity.title}</h2><div className="detail-meta"><span>{activity.date}</span><span className="flagged-location"><CountryFlag location={activity.location} />{activity.location}</span><span>{activity.region}</span></div><DetailField label="International counterpart" value={activity.counterpart} /><DetailField label="TRAI participants" value={activity.participants} /><DetailField label="Description" value={activity.description} /><DetailField label="Theme / focus" value={activity.theme} /><DetailField label="Key outcome / purpose" value={activity.outcome} /><DetailField label="Source / evidence" value={activity.source} /><p className="detail-source">{activity.sourceUrl && <a href={activity.sourceUrl} target="_blank" rel="noreferrer">Open supporting source ↗</a>}<span>{activity.sourceAuthority}</span></p>{activity.documentUrl && <p className="detail-source"><a href={activity.documentUrl} target="_blank" rel="noopener noreferrer">Open uploaded document ↗</a></p>}</article></div>;
 }
 
 function DetailField({ label, value }: { label: string; value: string }) { return <section className="detail-field"><h3>{label}</h3><p>{value}</p></section>; }

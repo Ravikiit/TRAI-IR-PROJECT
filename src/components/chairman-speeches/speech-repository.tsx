@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchUploadedSpeeches } from "@/lib/supabase/activity-documents";
 import type { ChairmanSpeech } from "@/types/chairman-speech";
 import { SpeechCard } from "./speech-card";
 import styles from "./speech-repository.module.css";
@@ -26,13 +27,43 @@ function dateValue(date: string) {
 
 export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [uploadedSpeeches, setUploadedSpeeches] = useState<ChairmanSpeech[]>([]);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadSpeeches() {
+      try {
+        const uploaded = await fetchUploadedSpeeches();
+        if (isCurrent) setUploadedSpeeches(uploaded);
+      } catch (error) {
+        console.error("Unable to load user-submitted Authority / Member Speeches.", error);
+        if (isCurrent) setLoadError(true);
+      }
+    }
+
+    void loadSpeeches();
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  const allSpeeches = useMemo(() => {
+    const existingIds = new Set(speeches.map((speech) => speech.ID));
+    return [
+      ...speeches,
+      ...uploadedSpeeches.filter((speech) => !existingIds.has(speech.ID)),
+    ];
+  }, [speeches, uploadedSpeeches]);
+
   const options = useMemo(() => ({
-    years: unique(speeches.map((speech) => String(speech.Year))).sort((a, b) => b.localeCompare(a)),
-    categories: unique(speeches.map((speech) => speech["Broad Category"])),
-    documentTypes: unique(speeches.map((speech) => speech["Document Type"])),
-    themes: unique(speeches.map((speech) => speech["Standardised Theme"])),
-  }), [speeches]);
-  const filteredSpeeches = useMemo(() => speeches
+    years: unique(allSpeeches.map((speech) => String(speech.Year))).sort((a, b) => b.localeCompare(a)),
+    categories: unique(allSpeeches.map((speech) => speech["Broad Category"])),
+    documentTypes: unique(allSpeeches.map((speech) => speech["Document Type"])),
+    themes: unique(allSpeeches.map((speech) => speech["Standardised Theme"])),
+  }), [allSpeeches]);
+  const filteredSpeeches = useMemo(() => allSpeeches
     .filter((speech) => {
       const searchable = [
         speech.Title,
@@ -40,6 +71,8 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
         speech["Broad Category"],
         speech["Standardised Theme"],
         speech["Short Description"],
+        speech["Speaker Name"] ?? "",
+        speech["Speaker Designation"] ?? "",
       ].join(" ").toLowerCase();
       return (!filters.search || searchable.includes(filters.search.toLowerCase()))
         && (!filters.year || String(speech.Year) === filters.year)
@@ -47,7 +80,7 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
         && (!filters.documentType || speech["Document Type"] === filters.documentType)
         && (!filters.theme || speech["Standardised Theme"] === filters.theme);
     })
-    .sort((first, second) => dateValue(second.Date) - dateValue(first.Date)), [filters, speeches]);
+    .sort((first, second) => dateValue(second.Date) - dateValue(first.Date)), [allSpeeches, filters]);
   const updateFilter = <Key extends keyof Filters>(key: Key, value: Filters[Key]) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
@@ -67,6 +100,11 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
           <FilterSelect label="Standardised Theme" value={filters.theme} onChange={(value) => updateFilter("theme", value)} allLabel="All themes" options={options.themes} />
         </div>
       </div>
+      {loadError && (
+        <p className={styles.loadWarning} role="status">
+          Newly submitted speeches could not be loaded. Existing speech records are shown.
+        </p>
+      )}
       <div className={styles.resultsHeader}>
         <h2>{filteredSpeeches.length} Documents</h2>
         <button type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>

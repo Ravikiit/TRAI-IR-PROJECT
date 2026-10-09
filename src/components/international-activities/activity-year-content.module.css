@@ -1,0 +1,10 @@
+.loadWarning {
+  margin: 0 0 18px;
+  padding: 10px 13px;
+  border-left: 3px solid #a87416;
+  border-radius: 4px;
+  background: #fff9ed;
+  color: #694d18;
+  font-size: .85rem;
+  line-height: 1.5;
+}
