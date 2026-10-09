@@ -91,6 +91,48 @@ function fieldId(name: string) {
   return `document-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 }
 
+function storageErrorMessage(error: DocumentUploadError) {
+  const diagnostics = error.diagnostics;
+  const details = `${diagnostics?.code ?? ""} ${diagnostics?.statusCode ?? ""} ${error.message}`
+    .toLowerCase();
+  let guidance = "Contact the site administrator if the upload continues to fail.";
+
+  if (
+    diagnostics?.status === 401 ||
+    diagnostics?.status === 403 ||
+    details.includes("row-level security") ||
+    details.includes("unauthorized") ||
+    details.includes("accessdenied")
+  ) {
+    guidance = "Supabase Storage denied this upload. Check the upload permission for the ir-documents bucket.";
+  } else if (diagnostics?.status === 404 || details.includes("bucketnotfound")) {
+    guidance = "The ir-documents Storage bucket could not be found.";
+  } else if (
+    diagnostics?.status === 413 ||
+    details.includes("entitytoolarge") ||
+    details.includes("payload too large") ||
+    details.includes("maximum allowed size")
+  ) {
+    guidance = "The file exceeds the current Supabase Storage bucket size limit. Try a smaller file.";
+  } else if (
+    diagnostics?.status === 415 ||
+    details.includes("mime") ||
+    details.includes("content type") ||
+    details.includes("file type")
+  ) {
+    guidance = "Supabase Storage rejected this file type. Check the bucket's allowed file types.";
+  }
+
+  const response = [
+    diagnostics?.code && `code: ${diagnostics.code}`,
+    diagnostics?.statusCode && `status code: ${diagnostics.statusCode}`,
+    diagnostics?.status && `HTTP ${diagnostics.status}`,
+    error.message && `message: ${error.message}`,
+  ].filter(Boolean).join("; ");
+
+  return `${guidance}${response ? ` Supabase response: ${response}` : ""}`;
+}
+
 export function DocumentUploadModal({
   triggerClassName,
   uploadIconClassName,
@@ -323,18 +365,35 @@ export function DocumentUploadModal({
       setUploadSucceeded(true);
     } catch (error) {
       if (error instanceof DocumentUploadError && error.stage === "storage") {
-        setUploadError(
-          "The document could not be uploaded. Please check your connection and try again.",
-        );
+        setUploadError(storageErrorMessage(error));
       } else if (error instanceof DocumentUploadError && error.stage === "database") {
         setUploadError(
           "The document file was uploaded, but its record could not be saved. Please contact the site administrator before retrying.",
         );
       } else {
-        console.error("Supabase document upload could not be completed.", error);
-        setUploadError(
-          "The document could not be uploaded. Please check the Supabase configuration and try again.",
-        );
+        const errorName = error instanceof Error ? error.name : "UnknownError";
+        if (error instanceof Error && error.message.includes("Missing NEXT_PUBLIC_SUPABASE_URL")) {
+          console.error("Supabase document upload is missing its public deployment configuration.", {
+            errorName,
+            requiredVariables: [
+              "NEXT_PUBLIC_SUPABASE_URL",
+              "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+            ],
+          });
+          setUploadError(
+            "Supabase is not configured for this deployment. The site administrator should check the required Vercel environment variables and redeploy.",
+          );
+        } else if (error instanceof TypeError) {
+          console.error("Supabase document upload could not reach the service.", { errorName });
+          setUploadError(
+            "Could not reach Supabase. Check your connection and contact the site administrator if the problem continues.",
+          );
+        } else {
+          console.error("Supabase document upload could not be completed.", { errorName });
+          setUploadError(
+            "The upload could not be completed. Please contact the site administrator and try again later.",
+          );
+        }
       }
     } finally {
       setIsUploading(false);

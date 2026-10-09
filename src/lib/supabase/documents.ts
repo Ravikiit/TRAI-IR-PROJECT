@@ -53,7 +53,11 @@ export class DocumentUploadError extends Error {
   constructor(
     readonly stage: "storage" | "database",
     message: string,
-    readonly filePath?: string,
+    readonly diagnostics?: {
+      status?: number;
+      statusCode?: string;
+      code?: string;
+    },
   ) {
     super(message);
     this.name = "DocumentUploadError";
@@ -81,6 +85,15 @@ function optionalText(value: string | undefined) {
   return trimmed || null;
 }
 
+function safeDiagnosticText(value: string | undefined) {
+  if (!value) return undefined;
+  return value
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted token]")
+    .replace(/\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+\b/g, "[redacted key]")
+    .slice(0, 500);
+}
+
 export async function uploadDocument(input: DocumentUploadInput) {
   const supabase = getSupabaseBrowserClient();
   const filePath = `documents/${crypto.randomUUID()}-${sanitizeFileName(input.file.name)}`;
@@ -94,11 +107,17 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (storageError) {
+    const diagnostics = {
+      status: storageError.status,
+      statusCode: safeDiagnosticText(storageError.statusCode),
+      code: safeDiagnosticText(storageError.code),
+    };
+    const message = safeDiagnosticText(storageError.message) ?? "Unknown Storage error";
     console.error("Supabase document Storage upload failed.", {
-      code: storageError.statusCode,
-      message: storageError.message,
+      ...diagnostics,
+      message,
     });
-    throw new DocumentUploadError("storage", storageError.message);
+    throw new DocumentUploadError("storage", message, diagnostics);
   }
 
   const { error: databaseError } = await supabase
@@ -135,11 +154,13 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (databaseError) {
+    const message = safeDiagnosticText(databaseError.message) ?? "Unknown database error";
     console.error("Supabase document database insert failed after Storage upload.", {
-      code: databaseError.code,
-      message: databaseError.message,
-      filePath,
+      code: safeDiagnosticText(databaseError.code),
+      message,
     });
-    throw new DocumentUploadError("database", databaseError.message, filePath);
+    throw new DocumentUploadError("database", message, {
+      code: safeDiagnosticText(databaseError.code),
+    });
   }
 }
