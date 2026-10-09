@@ -57,6 +57,7 @@ export class DocumentUploadError extends Error {
       status?: number;
       statusCode?: string;
       code?: string;
+      networkFailure?: boolean;
     },
   ) {
     super(message);
@@ -109,10 +110,14 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (storageError) {
+    const networkFailure =
+      storageError.status === undefined &&
+      /failed to fetch|networkerror|load failed/i.test(storageError.message);
     const diagnostics = {
       status: storageError.status,
       statusCode: safeUploadDiagnostic(storageError.statusCode),
       code: safeUploadDiagnostic(storageError.code),
+      networkFailure,
     };
     const message = safeUploadDiagnostic(storageError.message, filePath) ?? "Unknown Storage error";
     console.error("Supabase document Storage upload failed.", {

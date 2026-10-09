@@ -98,7 +98,10 @@ function storageErrorMessage(error: DocumentUploadError) {
     .toLowerCase();
   let guidance = "Contact the site administrator if the upload continues to fail.";
 
-  if (
+  if (diagnostics?.networkFailure) {
+    guidance =
+      "The browser could not get a response from Supabase. Check the deployed Supabase URL and browser network access, including DNS, TLS, and CORS settings.";
+  } else if (
     diagnostics?.status === 401 ||
     diagnostics?.status === 403 ||
     details.includes("row-level security") ||
