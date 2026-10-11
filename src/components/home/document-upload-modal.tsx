@@ -128,6 +128,10 @@ function storageErrorMessage(error: DocumentUploadError) {
   }
 
   const response = [
+    diagnostics?.pathname && `requestPath: ${diagnostics.pathname}`,
+    !diagnostics?.pathname &&
+      diagnostics?.attemptedPath &&
+      `attemptedPath (SDK-derived): ${diagnostics.attemptedPath}`,
     diagnostics?.code && `code: ${diagnostics.code}`,
     diagnostics?.statusCode && `status code: ${diagnostics.statusCode}`,
     diagnostics?.status && `HTTP ${diagnostics.status}`,

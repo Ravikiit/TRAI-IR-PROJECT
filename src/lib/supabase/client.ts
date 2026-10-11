@@ -4,6 +4,22 @@ import { createBrowserClient } from "@supabase/ssr";
 
 let supabaseClient: ReturnType<typeof createBrowserClient> | undefined;
 
+export type SupabaseRequestDiagnostic = {
+  pathname: string;
+  status: number | "unavailable";
+  code: string;
+};
+
+let lastSupabaseRequestDiagnostic: SupabaseRequestDiagnostic | undefined;
+
+export function clearSupabaseRequestDiagnostic() {
+  lastSupabaseRequestDiagnostic = undefined;
+}
+
+export function getSupabaseRequestDiagnostic() {
+  return lastSupabaseRequestDiagnostic;
+}
+
 function sanitizedRequestPath(input: RequestInfo | URL) {
   const requestUrl =
     input instanceof Request ? input.url : input instanceof URL ? input.href : input;
@@ -50,6 +66,11 @@ const diagnosticFetch: typeof fetch = async (input, init) => {
   try {
     response = await fetch(input, init);
   } catch (error) {
+    lastSupabaseRequestDiagnostic = {
+      pathname,
+      status: "unavailable",
+      code: "unavailable",
+    };
     try {
       console.warn("Supabase request diagnostic", {
         pathname,
@@ -70,6 +91,11 @@ const diagnosticFetch: typeof fetch = async (input, init) => {
       // The original response remains usable if diagnostic parsing fails.
     }
 
+    lastSupabaseRequestDiagnostic = {
+      pathname,
+      status: response.status,
+      code,
+    };
     try {
       console.warn("Supabase request diagnostic", {
         pathname,

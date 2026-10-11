@@ -1,4 +1,8 @@
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  clearSupabaseRequestDiagnostic,
+  getSupabaseBrowserClient,
+  getSupabaseRequestDiagnostic,
+} from "@/lib/supabase/client";
 
 const STORAGE_BUCKET = "ir-documents";
 
@@ -58,6 +62,8 @@ export class DocumentUploadError extends Error {
       statusCode?: string;
       code?: string;
       networkFailure?: boolean;
+      pathname?: string;
+      attemptedPath?: string;
     },
   ) {
     super(message);
@@ -102,6 +108,7 @@ export async function uploadDocument(input: DocumentUploadInput) {
   const filePath = `documents/${crypto.randomUUID()}-${sanitizeFileName(input.file.name)}`;
   const mimeType = getMimeType(input.file);
 
+  clearSupabaseRequestDiagnostic();
   const { error: storageError } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, input.file, {
@@ -110,14 +117,34 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (storageError) {
+    const requestDiagnostic = getSupabaseRequestDiagnostic();
+    const storageRequestDiagnostic = requestDiagnostic?.pathname.startsWith(
+      "/storage/v1/object/",
+    )
+      ? requestDiagnostic
+      : undefined;
     const networkFailure =
       storageError.status === undefined &&
       /failed to fetch|networkerror|load failed/i.test(storageError.message);
     const diagnostics = {
-      status: storageError.status,
+      status:
+        storageRequestDiagnostic?.status !== undefined &&
+        storageRequestDiagnostic.status !== "unavailable"
+          ? storageRequestDiagnostic.status
+          : storageError.status,
       statusCode: safeUploadDiagnostic(storageError.statusCode),
-      code: safeUploadDiagnostic(storageError.code),
+      code:
+        storageRequestDiagnostic?.code &&
+        storageRequestDiagnostic.code !== "unavailable"
+          ? storageRequestDiagnostic.code
+          : safeUploadDiagnostic(storageError.code),
       networkFailure,
+      pathname:
+        storageRequestDiagnostic &&
+        storageRequestDiagnostic.pathname !== "/<unavailable>"
+          ? storageRequestDiagnostic.pathname
+          : undefined,
+      attemptedPath: "/storage/v1/object/ir-documents/<redacted>",
     };
     const message = safeUploadDiagnostic(storageError.message, filePath) ?? "Unknown Storage error";
     console.error("Supabase document Storage upload failed.", {
