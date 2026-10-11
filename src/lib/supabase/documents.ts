@@ -1,7 +1,7 @@
 import {
-  clearSupabaseRequestDiagnostic,
+  createStorageRequestDiagnostic,
+  createSupabaseUploadClient,
   getSupabaseBrowserClient,
-  getSupabaseRequestDiagnostic,
 } from "@/lib/supabase/client";
 
 const STORAGE_BUCKET = "ir-documents";
@@ -58,7 +58,7 @@ export class DocumentUploadError extends Error {
     readonly stage: "storage" | "database",
     message: string,
     readonly diagnostics?: {
-      status?: number;
+      status?: number | "unavailable";
       statusCode?: string;
       code?: string;
       networkFailure?: boolean;
@@ -92,10 +92,28 @@ function optionalText(value: string | undefined) {
   return trimmed || null;
 }
 
-export function safeUploadDiagnostic(value: string | undefined, sensitivePath?: string) {
+export function safeUploadDiagnostic(
+  value: string | undefined,
+  sensitivePaths?: string | string[],
+) {
   if (!value) return undefined;
-  const safeValue = sensitivePath ? value.replaceAll(sensitivePath, "[redacted path]") : value;
+  const paths = typeof sensitivePaths === "string"
+    ? [sensitivePaths]
+    : sensitivePaths ?? [];
+  let safeValue = value;
+  for (const path of paths) {
+    if (!path) continue;
+    safeValue = safeValue
+      .replaceAll(path, "[redacted path]")
+      .replaceAll(encodeURIComponent(path), "[redacted path]");
+  }
+
   return safeValue
+    .replace(/\?[^\s"'<>]*/g, "?[redacted]")
+    .replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+      "[redacted id]",
+    )
     .replace(/https?:\/\/[^\s"'<>]+/gi, "[redacted URL]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted token]")
@@ -107,9 +125,15 @@ export async function uploadDocument(input: DocumentUploadInput) {
   const supabase = getSupabaseBrowserClient();
   const filePath = `documents/${crypto.randomUUID()}-${sanitizeFileName(input.file.name)}`;
   const mimeType = getMimeType(input.file);
+  const sensitivePaths = [
+    filePath,
+    input.file.name,
+    filePath.split("/").pop() ?? "",
+  ];
 
-  clearSupabaseRequestDiagnostic();
-  const { error: storageError } = await supabase.storage
+  const storageRequestDiagnostic = createStorageRequestDiagnostic(STORAGE_BUCKET);
+  const uploadClient = createSupabaseUploadClient(storageRequestDiagnostic.fetch);
+  const { error: storageError } = await uploadClient.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, input.file, {
       contentType: mimeType,
@@ -117,40 +141,31 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (storageError) {
-    const requestDiagnostic = getSupabaseRequestDiagnostic();
-    const storageRequestDiagnostic = requestDiagnostic?.pathname.startsWith(
-      "/storage/v1/object/",
-    )
-      ? requestDiagnostic
-      : undefined;
+    const requestDiagnostic = storageRequestDiagnostic.getDiagnostic();
     const networkFailure =
       storageError.status === undefined &&
       /failed to fetch|networkerror|load failed/i.test(storageError.message);
     const diagnostics = {
       status:
-        storageRequestDiagnostic?.status !== undefined &&
-        storageRequestDiagnostic.status !== "unavailable"
-          ? storageRequestDiagnostic.status
-          : storageError.status,
+        requestDiagnostic?.status !== undefined &&
+        requestDiagnostic.status !== "unavailable"
+          ? requestDiagnostic.status
+          : requestDiagnostic?.status ?? storageError.status,
       statusCode: safeUploadDiagnostic(storageError.statusCode),
       code:
-        storageRequestDiagnostic?.code &&
-        storageRequestDiagnostic.code !== "unavailable"
-          ? storageRequestDiagnostic.code
-          : safeUploadDiagnostic(storageError.code),
-      networkFailure,
-      pathname:
-        storageRequestDiagnostic &&
-        storageRequestDiagnostic.pathname !== "/<unavailable>"
-          ? storageRequestDiagnostic.pathname
+        requestDiagnostic?.code && requestDiagnostic.code !== "unavailable"
+          ? requestDiagnostic.code
           : undefined,
-      attemptedPath: "/storage/v1/object/ir-documents/<redacted>",
+      networkFailure,
+      pathname: requestDiagnostic?.pathname,
+      attemptedPath: requestDiagnostic
+        ? undefined
+        : "/storage/v1/object/ir-documents/<redacted>",
     };
-    const message = safeUploadDiagnostic(storageError.message, filePath) ?? "Unknown Storage error";
-    console.error("Supabase document Storage upload failed.", {
-      ...diagnostics,
-      message,
-    });
+    const message =
+      safeUploadDiagnostic(requestDiagnostic?.message, sensitivePaths) ??
+      safeUploadDiagnostic(storageError.message, sensitivePaths) ??
+      "Unknown Storage error";
     throw new DocumentUploadError("storage", message, diagnostics);
   }
 
@@ -188,11 +203,9 @@ export async function uploadDocument(input: DocumentUploadInput) {
     });
 
   if (databaseError) {
-    const message = safeUploadDiagnostic(databaseError.message, filePath) ?? "Unknown database error";
-    console.error("Supabase document database insert failed after Storage upload.", {
-      code: safeUploadDiagnostic(databaseError.code),
-      message,
-    });
+    const message =
+      safeUploadDiagnostic(databaseError.message, sensitivePaths) ??
+      "Unknown database error";
     throw new DocumentUploadError("database", message, {
       code: safeUploadDiagnostic(databaseError.code),
     });

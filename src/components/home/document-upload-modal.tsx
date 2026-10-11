@@ -134,7 +134,7 @@ function storageErrorMessage(error: DocumentUploadError) {
       `attemptedPath (SDK-derived): ${diagnostics.attemptedPath}`,
     diagnostics?.code && `code: ${diagnostics.code}`,
     diagnostics?.statusCode && `status code: ${diagnostics.statusCode}`,
-    diagnostics?.status && `HTTP ${diagnostics.status}`,
+    diagnostics?.status !== undefined && `HTTP ${diagnostics.status}`,
     error.message && `message: ${error.message}`,
   ].filter(Boolean).join("; ");
 
@@ -380,7 +380,7 @@ export function DocumentUploadModal({
           error.message && `message: ${error.message}`,
         ].filter(Boolean).join("; ");
         setUploadError(
-          `The document file was uploaded, but its record could not be saved.${response ? ` Supabase response: ${response}` : ""} Please contact the site administrator before retrying.`,
+          `The document file may already be uploaded, but its record could not be saved.${response ? ` Supabase response: ${response}` : ""} Do not retry the full upload immediately. Contact the site administrator before trying again.`,
         );
       } else {
         const errorName = error instanceof Error ? error.name : "UnknownError";
