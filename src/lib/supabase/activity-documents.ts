@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { normalizeStoredDate } from "@/lib/supabase/activity-document-dates";
 import type { InternationalActivity } from "@/types/international-activity";
 import type { ChairmanSpeech } from "@/types/chairman-speech";
 
@@ -21,8 +22,6 @@ type UploadedActivityRow = {
   event_source: string | null;
   event_source_url: string | null;
 };
-
-type DatedActivityRow = UploadedActivityRow & { event_start_date: string };
 
 type UploadedSpeechRow = {
   id: string;
@@ -63,10 +62,6 @@ function formatEventDate(startDate: string, endDate: string | null) {
   return `${formatDate(startDate)} – ${formatDate(endDate)}`;
 }
 
-function isDateOnly(value: string | null): value is string {
-  return value !== null && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 export async function fetchUploadedActivities(): Promise<InternationalActivity[]> {
   const { data, error } = await getSupabaseBrowserClient()
     .from("documents")
@@ -78,27 +73,32 @@ export async function fetchUploadedActivities(): Promise<InternationalActivity[]
   if (error) throw error;
 
   return ((data ?? []) as UploadedActivityRow[])
-    .filter((row): row is DatedActivityRow => isDateOnly(row.event_start_date))
-    .map((row): InternationalActivity => ({
-      key: row.id,
-      activityId: row.id,
-      date: formatEventDate(row.event_start_date, row.event_end_date),
-      dateSort: row.event_start_date,
-      location: requiredText(row.event_location),
-      region: requiredText(row.event_region),
-      counterpart: requiredText(row.event_counterpart),
-      activityType: requiredText(row.event_activity_type),
-      title: requiredText(row.title),
-      description: requiredText(row.description),
-      participants: requiredText(row.event_participants),
-      theme: requiredText(row.event_theme),
-      outcome: requiredText(row.event_outcome),
-      source: requiredText(row.event_source),
-      sourceUrl: row.event_source_url?.trim() || null,
-      sourceAuthority: "User submitted",
-      verificationStatus: "User submitted",
-      documentUrl: publicDocumentUrl(row.file_path),
-    }));
+    .flatMap((row): InternationalActivity[] => {
+      const startDate = normalizeStoredDate(row.event_start_date);
+      if (!startDate) return [];
+
+      const endDate = normalizeStoredDate(row.event_end_date);
+      return [{
+        key: row.id,
+        activityId: row.id,
+        date: formatEventDate(startDate, endDate),
+        dateSort: startDate,
+        location: requiredText(row.event_location),
+        region: requiredText(row.event_region),
+        counterpart: requiredText(row.event_counterpart),
+        activityType: requiredText(row.event_activity_type),
+        title: requiredText(row.title),
+        description: requiredText(row.description),
+        participants: requiredText(row.event_participants),
+        theme: requiredText(row.event_theme),
+        outcome: requiredText(row.event_outcome),
+        source: requiredText(row.event_source),
+        sourceUrl: row.event_source_url?.trim() || null,
+        sourceAuthority: "User submitted",
+        verificationStatus: "User submitted",
+        documentUrl: publicDocumentUrl(row.file_path),
+      }];
+    });
 }
 
 export async function fetchUploadedSpeeches(): Promise<ChairmanSpeech[]> {
@@ -112,9 +112,7 @@ export async function fetchUploadedSpeeches(): Promise<ChairmanSpeech[]> {
   if (error) throw error;
 
   return ((data ?? []) as UploadedSpeechRow[]).map((row): ChairmanSpeech => {
-    const deliveryDate = isDateOnly(row.speech_delivery_date)
-      ? row.speech_delivery_date
-      : null;
+    const deliveryDate = normalizeStoredDate(row.speech_delivery_date);
     const date = deliveryDate ? formatDate(deliveryDate) : "Date unavailable";
 
     return {
