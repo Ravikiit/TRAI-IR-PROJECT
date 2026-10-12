@@ -22,6 +22,9 @@ const [contract, uploadClient, finalization] = await Promise.all([
   loadTypeScriptModule("../src/lib/supabase/document-upload-client.ts"),
   loadTypeScriptModule("../src/lib/supabase/document-upload-finalization.ts"),
 ]);
+const { normalizeStoredDate } = await loadTypeScriptModule(
+  "../src/lib/supabase/activity-document-dates.ts",
+);
 const {
   createDocumentFilePath,
   DOCUMENT_CATEGORIES,
@@ -247,6 +250,39 @@ test("accepts only server-shaped paths tied to the original filename", () => {
   assert.equal(isValidDocumentFilePath(generated, fileName), true);
   assert.equal(isValidDocumentFilePath(generated, "different.pdf"), false);
   assert.equal(isValidDocumentFilePath(`documents/../${fileName}`, fileName), false);
+});
+
+test("normalizes valid UTC and offset dates without shifting the saved calendar day", () => {
+  assert.equal(normalizeStoredDate("2025-03-12"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00.000Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T09:30Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T09Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00.123456Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00,5Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T24:00:00Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T24:00Z"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-03-12T00:30:00+14:00"), "2025-03-12");
+  assert.equal(normalizeStoredDate("2025-01-01T00:30:00+14:00"), "2025-01-01");
+  assert.equal(normalizeStoredDate("2025-03-12T23:30:00-08:00"), "2025-03-12");
+});
+
+test("rejects missing, invalid, malformed, and unsupported stored dates", () => {
+  assert.equal(normalizeStoredDate(null), null);
+  assert.equal(normalizeStoredDate(""), null);
+  assert.equal(normalizeStoredDate("not-a-date"), null);
+  assert.equal(normalizeStoredDate("2025-02-30"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00"), null);
+  assert.equal(normalizeStoredDate("2025-03-12Tnot-a-time"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T24:00:01Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T24:01:00Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T24:00:00.1Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T24Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T25:00Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T09:60Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:60Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00.Z"), null);
+  assert.equal(normalizeStoredDate("2025-03-12T09:30:00+14:01"), null);
+  assert.equal(normalizeStoredDate("03/12/2025"), null);
 });
 
 test("removes a newly uploaded object after a definite metadata error", async () => {
