@@ -138,7 +138,14 @@ function storageErrorMessage(error: DocumentUploadError) {
     error.message && `message: ${error.message}`,
   ].filter(Boolean).join("; ");
 
-  return `${guidance}${response ? ` Supabase response: ${response}` : ""}`;
+  const cleanup = error.diagnostics?.cleanup;
+  const cleanupNotice = cleanup?.attempted
+    ? cleanup.succeeded
+      ? " The file cleanup succeeded."
+      : ` File cleanup also failed${cleanup.code ? ` (${cleanup.code})` : ""}; the file may still exist.`
+    : "";
+
+  return `${guidance}${response ? ` Supabase response: ${response}` : ""}${cleanupNotice}`;
 }
 
 export function DocumentUploadModal({
@@ -379,8 +386,14 @@ export function DocumentUploadModal({
           error.diagnostics?.code && `code: ${error.diagnostics.code}`,
           error.message && `message: ${error.message}`,
         ].filter(Boolean).join("; ");
+        const cleanup = error.diagnostics?.cleanup;
+        const cleanupNotice = cleanup?.succeeded
+          ? " The uploaded file was removed, so you can safely retry."
+          : cleanup?.attempted
+            ? ` Cleanup also failed${cleanup.code ? ` (${cleanup.code})` : ""}; the file may still exist. Do not retry the full upload until the repository is checked.`
+            : " The save result is uncertain and the file may already exist. Do not retry the full upload until the repository is checked.";
         setUploadError(
-          `The document file may already be uploaded, but its record could not be saved.${response ? ` Supabase response: ${response}` : ""} Do not retry the full upload immediately. Contact the site administrator before trying again.`,
+          `The document record could not be saved.${response ? ` Supabase response: ${response}` : ""}${cleanupNotice}`,
         );
       } else {
         const errorName = error instanceof Error ? error.name : "UnknownError";

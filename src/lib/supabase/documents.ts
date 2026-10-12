@@ -1,61 +1,27 @@
 import {
-  createStorageRequestDiagnostic,
-  createSupabaseUploadClient,
-  getSupabaseBrowserClient,
-} from "@/lib/supabase/client";
+  DOCUMENT_CATEGORIES,
+  STORAGE_BUCKET,
+  type DocumentCategory,
+  type DocumentUploadMetadata,
+  isValidDocumentFilePath,
+  validateDocumentFile,
+} from "@/lib/supabase/document-upload-contract";
+import { uploadFileToSignedUrl } from "@/lib/supabase/document-upload-client";
 
-const STORAGE_BUCKET = "ir-documents";
+export { DOCUMENT_CATEGORIES };
+export type { DocumentCategory };
 
-export const DOCUMENT_CATEGORIES = [
-  "APT / ITU",
-  "Authority / Member Speeches",
-  "Events",
-  "Miscellaneous",
-] as const;
+export type DocumentUploadInput = DocumentUploadMetadata & { file: File };
 
-export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
-
-const MIME_TYPES: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ppt: "application/vnd.ms-powerpoint",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-};
-
-export type DocumentUploadInput = {
-  category: DocumentCategory;
-  title: string;
-  description: string;
-  importantInformation: string;
-  uploadedBy: string;
-  file: File;
-  sourceContext?: string;
-  eventStartDate?: string;
-  eventEndDate?: string;
-  eventLocation?: string;
-  eventRegion?: string;
-  eventCounterpart?: string;
-  eventActivityType?: string;
-  eventParticipants?: string;
-  eventTheme?: string;
-  eventOutcome?: string;
-  eventSource?: string;
-  eventSourceUrl?: string;
-  speechDeliveryDate?: string;
-  speechEvent?: string;
-  speechDocumentType?: string;
-  speechBroadCategory?: string;
-  speechStandardisedTheme?: string;
-  speakerName?: string;
-  speakerDesignation?: string;
+type CleanupStatus = {
+  attempted: boolean;
+  succeeded: boolean | null;
+  code?: string;
 };
 
 export class DocumentUploadError extends Error {
   constructor(
-    readonly stage: "storage" | "database",
+    readonly stage: "storage" | "database" | "validation" | "configuration",
     message: string,
     readonly diagnostics?: {
       status?: number | "unavailable";
@@ -64,6 +30,7 @@ export class DocumentUploadError extends Error {
       networkFailure?: boolean;
       pathname?: string;
       attemptedPath?: string;
+      cleanup?: CleanupStatus;
     },
   ) {
     super(message);
@@ -71,25 +38,68 @@ export class DocumentUploadError extends Error {
   }
 }
 
-function sanitizeFileName(fileName: string) {
-  const safeName = fileName
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/^[._-]+|[._-]+$/g, "")
-    .slice(0, 180);
+type ApiError = {
+  stage?: string;
+  code?: string;
+  message?: string;
+  cleanup?: CleanupStatus;
+};
 
-  return safeName || "document";
+type ApiReply = {
+  response: Response;
+  body: Record<string, unknown>;
+};
+
+function responseBody(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function getMimeType(file: File) {
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return MIME_TYPES[extension] ?? (file.type || "application/octet-stream");
+async function callUploadApi(body: Record<string, unknown>): Promise<ApiReply> {
+  const response = await fetch("/api/documents/upload", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify(body),
+  });
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    parsed = {};
+  }
+  return { response, body: responseBody(parsed) };
 }
 
-function optionalText(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed || null;
+function apiError(reply: ApiReply): ApiError {
+  return responseBody(reply.body.error) as ApiError;
+}
+
+function cleanCode(value: unknown, fallback: string) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value)
+    ? value
+    : fallback;
+}
+
+function errorForApiReply(reply: ApiReply, fallbackStage: "storage" | "database") {
+  const error = apiError(reply);
+  const stage =
+    error.stage === "database" || error.stage === "validation" ||
+    error.stage === "configuration"
+      ? error.stage
+      : fallbackStage;
+  const cleanup = error.cleanup;
+  return new DocumentUploadError(
+    stage,
+    typeof error.message === "string" ? error.message : "The upload request failed.",
+    {
+      status: reply.response.status,
+      code: cleanCode(error.code, "upload_request_failed"),
+      ...(cleanup ? { cleanup } : {}),
+    },
+  );
 }
 
 export function safeUploadDiagnostic(
@@ -115,99 +125,103 @@ export function safeUploadDiagnostic(
       "[redacted id]",
     )
     .replace(/https?:\/\/[^\s"'<>]+/gi, "[redacted URL]")
-    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/Bearer\s+\S+/gi, "******")
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted token]")
     .replace(/\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+\b/g, "[redacted key]")
     .slice(0, 500);
 }
 
+function requestPath(signedUrl: string, filePath: string) {
+  try {
+    const path = new URL(signedUrl).pathname;
+    return path.replace(filePath, "<redacted>");
+  } catch {
+    return `/storage/v1/object/upload/sign/${STORAGE_BUCKET}/<redacted>`;
+  }
+}
+
 export async function uploadDocument(input: DocumentUploadInput) {
-  const supabase = getSupabaseBrowserClient();
-  const filePath = `documents/${crypto.randomUUID()}-${sanitizeFileName(input.file.name)}`;
-  const mimeType = getMimeType(input.file);
-  const sensitivePaths = [
-    filePath,
-    input.file.name,
-    filePath.split("/").pop() ?? "",
-  ];
-
-  const storageRequestDiagnostic = createStorageRequestDiagnostic(STORAGE_BUCKET);
-  const uploadClient = createSupabaseUploadClient(storageRequestDiagnostic.fetch);
-  const { error: storageError } = await uploadClient.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, input.file, {
-      contentType: mimeType,
-      upsert: false,
+  const file = validateDocumentFile(input.file.name, input.file.size);
+  if (!file.valid) {
+    throw new DocumentUploadError("validation", file.message, {
+      status: file.status,
     });
-
-  if (storageError) {
-    const requestDiagnostic = storageRequestDiagnostic.getDiagnostic();
-    const networkFailure =
-      storageError.status === undefined &&
-      /failed to fetch|networkerror|load failed/i.test(storageError.message);
-    const diagnostics = {
-      status:
-        requestDiagnostic?.status !== undefined &&
-        requestDiagnostic.status !== "unavailable"
-          ? requestDiagnostic.status
-          : requestDiagnostic?.status ?? storageError.status,
-      statusCode: safeUploadDiagnostic(storageError.statusCode),
-      code:
-        requestDiagnostic?.code && requestDiagnostic.code !== "unavailable"
-          ? requestDiagnostic.code
-          : undefined,
-      networkFailure,
-      pathname: requestDiagnostic?.pathname,
-      attemptedPath: requestDiagnostic
-        ? undefined
-        : "/storage/v1/object/ir-documents/<redacted>",
-    };
-    const message =
-      safeUploadDiagnostic(requestDiagnostic?.message, sensitivePaths) ??
-      safeUploadDiagnostic(storageError.message, sensitivePaths) ??
-      "Unknown Storage error";
-    throw new DocumentUploadError("storage", message, diagnostics);
   }
 
-  const { error: databaseError } = await supabase
-    .from("documents")
-    .insert({
-      category: input.category,
-      title: input.title.trim(),
-      description: input.description.trim(),
-      important_information: optionalText(input.importantInformation),
-      uploaded_by: optionalText(input.uploadedBy),
-      file_name: input.file.name,
-      file_path: filePath,
-      file_type: mimeType,
-      file_size: input.file.size,
-      source_context: optionalText(input.sourceContext),
-      event_start_date: optionalText(input.eventStartDate),
-      event_end_date: optionalText(input.eventEndDate),
-      event_location: optionalText(input.eventLocation),
-      event_region: optionalText(input.eventRegion),
-      event_counterpart: optionalText(input.eventCounterpart),
-      event_activity_type: optionalText(input.eventActivityType),
-      event_participants: optionalText(input.eventParticipants),
-      event_theme: optionalText(input.eventTheme),
-      event_outcome: optionalText(input.eventOutcome),
-      event_source: optionalText(input.eventSource),
-      event_source_url: optionalText(input.eventSourceUrl),
-      speech_delivery_date: optionalText(input.speechDeliveryDate),
-      speech_event: optionalText(input.speechEvent),
-      speech_document_type: optionalText(input.speechDocumentType),
-      speech_broad_category: optionalText(input.speechBroadCategory),
-      speech_standardised_theme: optionalText(input.speechStandardisedTheme),
-      speaker_name: optionalText(input.speakerName),
-      speaker_designation: optionalText(input.speakerDesignation),
+  const {
+    file: _file,
+    ...metadata
+  } = input;
+  let prepared: ApiReply;
+  try {
+    prepared = await callUploadApi({
+      action: "prepare",
+      metadata,
+      fileName: input.file.name,
+      fileSize: input.file.size,
     });
+  } catch {
+    throw new DocumentUploadError("storage", "The upload service could not be reached.", {
+      status: "unavailable",
+      networkFailure: true,
+    });
+  }
+  if (!prepared.response.ok || prepared.body.ok !== true) {
+    throw errorForApiReply(prepared, "storage");
+  }
 
-  if (databaseError) {
-    const message =
-      safeUploadDiagnostic(databaseError.message, sensitivePaths) ??
-      "Unknown database error";
-    throw new DocumentUploadError("database", message, {
-      code: safeUploadDiagnostic(databaseError.code),
+  const filePath = prepared.body.filePath;
+  const signedUrl = prepared.body.signedUrl;
+  if (
+    typeof filePath !== "string" ||
+    !isValidDocumentFilePath(filePath, input.file.name) ||
+    typeof signedUrl !== "string"
+  ) {
+    throw new DocumentUploadError(
+      "configuration",
+      "The upload service returned an invalid Storage upload target.",
+    );
+  }
+
+  const storageResult = await uploadFileToSignedUrl(
+    signedUrl,
+    input.file,
+    file.contentType,
+  );
+  if (!storageResult.succeeded) {
+    throw new DocumentUploadError("storage", "Supabase Storage could not save the document.", {
+      status: storageResult.status,
+      statusCode: storageResult.code,
+      code: storageResult.code,
+      networkFailure: storageResult.networkFailure,
+      pathname: requestPath(signedUrl, filePath),
     });
+  }
+
+  let finalized: ApiReply;
+  try {
+    finalized = await callUploadApi({
+      action: "finalize",
+      metadata,
+      fileName: input.file.name,
+      fileSize: input.file.size,
+      filePath,
+    });
+  } catch {
+    throw new DocumentUploadError(
+      "database",
+      "The metadata save could not be confirmed. The document file may already exist; do not retry until the repository has been checked.",
+      {
+        code: "finalize_result_unknown",
+        cleanup: {
+          attempted: false,
+          succeeded: null,
+          code: "database_result_unknown",
+        },
+      },
+    );
+  }
+  if (!finalized.response.ok || finalized.body.ok !== true) {
+    throw errorForApiReply(finalized, "database");
   }
 }
