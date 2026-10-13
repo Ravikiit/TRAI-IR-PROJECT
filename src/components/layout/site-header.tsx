@@ -10,6 +10,8 @@ const navigation = [
   { href: "/global-engagement-map", label: "Global Engagement Map" },
   { href: "/past-activities", label: "Past Activities" },
   { href: "/chairman-speeches", label: "Authority’s Speeches" },
+  { href: "/documents/apt-itu", label: "APT / ITU" },
+  { href: "/documents/miscellaneous", label: "Miscellaneous" },
 ];
 
 export function SiteHeader() {
