@@ -72,26 +72,77 @@ test("rejects an incorrect passphrase without accessing storage or metadata", as
 });
 
 test("fails closed when deletion configuration is missing", async () => {
-  const response = await deleteUploadedDocument(documentId, passphrase, {
-    createStore: () => {
-      throw new Error("must not create a client");
-    },
-  });
+  const originalConsoleError = console.error;
+  const diagnosticCodes = [];
+  console.error = (_message, details) => diagnosticCodes.push(details.code);
 
-  assert.deepEqual(await responseBody(response), {
-    status: 503,
-    body: { error: "deletion_not_configured" },
-  });
+  try {
+    const missingPassphrase = await deleteUploadedDocument(
+      documentId,
+      passphrase,
+      {
+        configurationErrorCode: "missing_document_delete_passphrase",
+        createStore: () => createStore().store,
+      },
+    );
+    const missingUrl = await deleteUploadedDocument(documentId, passphrase, {
+      expectedPassphrase: passphrase,
+      configurationErrorCode: "missing_supabase_url",
+      createStore: undefined,
+    });
+    const missingServiceKey = await deleteUploadedDocument(
+      documentId,
+      passphrase,
+      {
+        expectedPassphrase: passphrase,
+        configurationErrorCode: "missing_supabase_service_role_key",
+      },
+    );
 
-  const serviceKeyMissing = await deleteUploadedDocument(
-    documentId,
-    passphrase,
-    { expectedPassphrase: passphrase },
-  );
-  assert.deepEqual(await responseBody(serviceKeyMissing), {
-    status: 503,
-    body: { error: "deletion_not_configured" },
-  });
+    for (const response of [missingPassphrase, missingUrl, missingServiceKey]) {
+      assert.deepEqual(await responseBody(response), {
+        status: 503,
+        body: { error: "deletion_not_configured" },
+      });
+    }
+    assert.deepEqual(diagnosticCodes, [
+      "missing_document_delete_passphrase",
+      "missing_supabase_url",
+      "missing_supabase_service_role_key",
+    ]);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
+test("logs only a safe code when Supabase client initialization fails", async () => {
+  const originalConsoleError = console.error;
+  const diagnosticEntries = [];
+  console.error = (...args) => diagnosticEntries.push(args);
+
+  try {
+    const response = await deleteUploadedDocument(documentId, passphrase, {
+      expectedPassphrase: passphrase,
+      createStore: () => {
+        throw new Error("private initialization details");
+      },
+    });
+
+    assert.deepEqual(await responseBody(response), {
+      status: 503,
+      body: { error: "deletion_not_configured" },
+    });
+    assert.deepEqual(diagnosticEntries, [[
+      "Document deletion configuration failure.",
+      { code: "supabase_client_initialization_failed" },
+    ]]);
+    assert.equal(
+      JSON.stringify(diagnosticEntries).includes("private initialization details"),
+      false,
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
 });
 
 test("rejects invalid IDs before creating a Supabase client", async () => {

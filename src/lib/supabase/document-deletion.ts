@@ -17,7 +17,12 @@ export type UploadedDocumentDeletionStore = {
 type DeleteConfiguration = {
   expectedPassphrase?: string;
   createStore?: () => UploadedDocumentDeletionStore;
+  configurationErrorCode?: string;
 };
+
+function reportConfigurationError(code: string) {
+  console.error("Document deletion configuration failure.", { code });
+}
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return Response.json(body, {
@@ -47,6 +52,12 @@ export async function deleteUploadedDocument(
   }
 
   if (!configuration.expectedPassphrase || !configuration.createStore) {
+    reportConfigurationError(
+      configuration.configurationErrorCode ??
+        (!configuration.expectedPassphrase
+          ? "missing_document_delete_passphrase"
+          : "missing_supabase_configuration"),
+    );
     return jsonResponse(503, { error: "deletion_not_configured" });
   }
 
@@ -58,6 +69,7 @@ export async function deleteUploadedDocument(
   try {
     store = configuration.createStore();
   } catch {
+    reportConfigurationError("supabase_client_initialization_failed");
     return jsonResponse(503, { error: "deletion_not_configured" });
   }
 
