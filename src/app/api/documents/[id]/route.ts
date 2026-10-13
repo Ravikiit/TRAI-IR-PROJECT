@@ -12,12 +12,20 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const expectedPassphrase = process.env.DOCUMENT_DELETE_PASSPHRASE;
+  const configurationErrorCode = !expectedPassphrase
+    ? "missing_document_delete_passphrase"
+    : !supabaseUrl
+      ? "missing_supabase_url"
+      : !serviceRoleKey
+        ? "missing_supabase_service_role_key"
+        : undefined;
 
   return deleteUploadedDocument(
     id,
     request.headers.get("x-document-delete-passphrase"),
     {
       expectedPassphrase,
+      configurationErrorCode,
       createStore:
         supabaseUrl && serviceRoleKey
           ? () => {
