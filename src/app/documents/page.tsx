@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { DeleteDocumentButton } from "@/components/documents/delete-document-button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./documents.module.css";
 
@@ -56,6 +57,7 @@ export default function DocumentsPage() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
 
   useEffect(() => {
     let isCurrent = true;
@@ -156,14 +158,19 @@ export default function DocumentsPage() {
                 Unable to load the IR Repository at the moment. Please try again later.
               </p>
             ) : documents.length === 0 ? (
-              <p className={styles.message} role="status">
-                No documents have been added to the IR Repository yet.
-              </p>
+              <>
+                {deleteNotice && <p className={styles.message} role="status">{deleteNotice}</p>}
+                <p className={styles.message} role="status">
+                  No documents have been added to the IR Repository yet.
+                </p>
+              </>
             ) : filteredDocuments.length === 0 ? (
               <p className={styles.message} role="status">
                 No documents match your search.
               </p>
             ) : (
+              <>
+              {deleteNotice && <p className={styles.message} role="status">{deleteNotice}</p>}
               <div className={styles.documentGrid}>
                 {filteredDocuments.map((document) => {
                   const supabase = getSupabaseBrowserClient();
@@ -228,10 +235,21 @@ export default function DocumentsPage() {
                           <path d="M15 11v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
                         </svg>
                       </a>
+                      <DeleteDocumentButton
+                        documentId={document.id}
+                        title={document.title}
+                        onDeleted={() => {
+                          setDocuments((current) =>
+                            current.filter((item) => item.id !== document.id),
+                          );
+                          setDeleteNotice("Document deleted successfully.");
+                        }}
+                      />
                     </article>
                   );
                 })}
               </div>
+              </>
             )}
           </div>
         </section>

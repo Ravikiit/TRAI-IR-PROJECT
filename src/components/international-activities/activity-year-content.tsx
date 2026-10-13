@@ -15,6 +15,7 @@ export function ActivityYearContent({
 }) {
   const [uploadedActivities, setUploadedActivities] = useState<InternationalActivity[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
 
   useEffect(() => {
     let isCurrent = true;
@@ -78,7 +79,16 @@ export function ActivityYearContent({
               Newly submitted activities could not be loaded. Existing activity records are shown.
             </p>
           )}
-          <ActivityExplorer activities={yearActivities} />
+          {deleteNotice && <p className={styles.loadWarning} role="status">{deleteNotice}</p>}
+          <ActivityExplorer
+            activities={yearActivities}
+            onDeleteActivity={(id) => {
+              setUploadedActivities((current) =>
+                current.filter((activity) => activity.key !== id),
+              );
+              setDeleteNotice("User-submitted activity deleted successfully.");
+            }}
+          />
         </div>
       </section>
     </>
