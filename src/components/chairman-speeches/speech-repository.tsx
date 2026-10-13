@@ -29,6 +29,7 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [uploadedSpeeches, setUploadedSpeeches] = useState<ChairmanSpeech[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
 
   useEffect(() => {
     let isCurrent = true;
@@ -56,6 +57,10 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
       ...uploadedSpeeches.filter((speech) => !existingIds.has(speech.ID)),
     ];
   }, [speeches, uploadedSpeeches]);
+  const curatedIds = useMemo(
+    () => new Set(speeches.map((speech) => speech.ID)),
+    [speeches],
+  );
 
   const options = useMemo(() => ({
     years: unique(allSpeeches.map((speech) => String(speech.Year))).sort((a, b) => b.localeCompare(a)),
@@ -105,6 +110,7 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
           Newly submitted speeches could not be loaded. Existing speech records are shown.
         </p>
       )}
+      {deleteNotice && <p className={styles.loadWarning} role="status">{deleteNotice}</p>}
       <div className={styles.resultsHeader}>
         <h2>{filteredSpeeches.length} Documents</h2>
         <button type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>
@@ -115,7 +121,19 @@ export function SpeechRepository({ speeches }: { speeches: ChairmanSpeech[] }) {
           <button type="button" onClick={() => setFilters(emptyFilters)}>Clear Filters</button>
         </section>
       ) : (
-        <div className={styles.grid}>{filteredSpeeches.map((speech) => <SpeechCard key={speech.ID} speech={speech} />)}</div>
+        <div className={styles.grid}>{filteredSpeeches.map((speech) => (
+          <SpeechCard
+            key={speech.ID}
+            speech={speech}
+            isUploaded={!curatedIds.has(speech.ID)}
+            onDeleted={(id) => {
+              setUploadedSpeeches((current) =>
+                current.filter((item) => item.ID !== id),
+              );
+              setDeleteNotice("User-submitted speech deleted successfully.");
+            }}
+          />
+        ))}</div>
       )}
     </div>
   );

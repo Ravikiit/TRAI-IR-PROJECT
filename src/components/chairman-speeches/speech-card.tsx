@@ -1,7 +1,16 @@
 import type { ChairmanSpeech } from "@/types/chairman-speech";
+import { DeleteDocumentButton } from "@/components/documents/delete-document-button";
 import styles from "./speech-repository.module.css";
 
-export function SpeechCard({ speech }: { speech: ChairmanSpeech }) {
+export function SpeechCard({
+  speech,
+  isUploaded = false,
+  onDeleted,
+}: {
+  speech: ChairmanSpeech;
+  isUploaded?: boolean;
+  onDeleted?: (id: string) => void;
+}) {
   return (
     <article className={styles.card}>
       <div className={styles.cardTop}>
@@ -18,6 +27,13 @@ export function SpeechCard({ speech }: { speech: ChairmanSpeech }) {
       <a className={styles.documentLink} href={speech.filePath} rel="noopener noreferrer">
         VIEW DOCUMENT <span aria-hidden="true">→</span>
       </a>
+      {isUploaded && onDeleted && (
+        <DeleteDocumentButton
+          documentId={speech.ID}
+          title={speech.Title}
+          onDeleted={() => onDeleted(speech.ID)}
+        />
+      )}
     </article>
   );
 }
